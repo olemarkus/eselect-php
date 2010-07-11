@@ -1,0 +1,96 @@
+# -*-eselect-*-  vim: ft=eselect
+
+inherit config
+
+DESCRIPTION="Manage php installations"
+MAINTAINER="php-bugs@gentoo.org"
+
+ENV_FILE=${ROOT}/etc/env.d/19php
+MODULES="pecl mod_php"
+
+find_targets() {
+	ls -d /usr/lib/php*
+}
+
+find_targets_pecl() {
+	for target in `find_targets`; do
+		[[ -f $target/bin/phpize ]] && echo $(basename $target)
+	done
+}
+find_targets_apache2() {
+	for target in `find_targets`; do
+		[[ -f $target/apache/libphp5.so ]] && echo $target
+	done
+}
+get_enabled_targets() {
+	 echo $(load_config "${ENV_FILE}" PHP_ENABLED_VERSIONS)
+}
+
+is_enabled() {
+	local target
+	for target in $(get_enabled_targets); do
+		[[ $target == $1 ]] && return 0
+	done
+	return 1
+}
+
+list_pecl() {
+	targets=( $(find_targets_pecl) )
+	for (( i = 0; i < ${#targets[@]}; i++ )) ; do
+		is_enabled ${opts:-} ${targets[i]} \
+			&& targets[i]=$(highlight_marker "${targets[i]}")
+	done
+	write_numbered_list -m "(none found)" "${targets[@]}"
+}
+
+list_apache2() {
+	targets=( $(find_targets_apache2) )
+	for (( i = 0; i < ${#targets[@]}; i++ )) ; do
+		is_enabled ${opts:-} ${targets[i]} \
+			&& targets[i]=$(highlight_marker "${targets[i]}")
+	done
+	write_numbered_list -m "(none found)" "${targets[@]}"
+}
+
+set_apache2() {
+	ln -sf $1/modules/libphp5.so /usr/lib64/apache2/modules/
+}
+
+
+## set action
+
+do_set() {
+	set_$1 $2
+}
+
+
+
+
+## enable action
+
+describe_enable() {
+	echo "Makes PECL ebuilds build extension for this slot"
+}
+
+describe_enable_parameters() {
+	echo "<php slot>"
+}
+
+do_enable() {
+ 	append_config "${ENV_FILE}" PHP_ENABLED_VERSIONS $1
+}
+
+
+## List action
+
+describe_list() {
+	echo "Lists available php installs for a sapi"
+}
+
+describe_enable_parameters() {
+	echo "<module>"
+}
+
+do_list() {
+	list_$1
+}
