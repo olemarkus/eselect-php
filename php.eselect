@@ -1,27 +1,50 @@
 # -*-eselect-*-  vim: ft=eselect
 
-inherit config
+inherit config multilib
 
 DESCRIPTION="Manage php installations"
 MAINTAINER="php-bugs@gentoo.org"
 
 ENV_FILE=${ROOT}/etc/env.d/19php
-MODULES="pecl mod_php"
+MODULES="pecl cli apache2"
+
+get_libdir() {
+	local dir
+	if has lib64 `list_libdirs`; then
+		echo /usr/lib64
+		return
+	fi
+	echo /usr/lib
+}
 
 find_targets() {
-	ls -d /usr/lib/php*
+	for dir in $(get_libdir)/php*; do
+		t=`basename $dir`
+		has $t $dirs || dirs="${dirs} $t"
+	done
+  echo $dirs
 }
 
 find_targets_pecl() {
 	for target in `find_targets`; do
-		[[ -f $target/bin/phpize ]] && echo $(basename $target)
+		[[ -f `get_libdir`/$target/bin/phpize ]] && echo $(basename $target)
 	done
 }
+
 find_targets_apache2() {
 	for target in `find_targets`; do
-		[[ -f $target/apache/libphp5.so ]] && echo $target
+		[[ -f `get_libdir`/$target/apache/libphp5.so ]] && echo $target
 	done
 }
+find_targets_cli() {
+	for target in `find_targets`; do
+		[[ -f `get_libdir`/$target/bin/php ]] && echo $target
+	done
+}
+get_active_cli() {
+	echo `readlink /usr/bin/php | sed -e "s|/bin/php\$||g" | sed -e "s|^$(get_libdir)/||g"`
+}
+
 get_enabled_targets() {
 	 echo $(load_config "${ENV_FILE}" PHP_ENABLED_VERSIONS)
 }
@@ -35,7 +58,7 @@ is_enabled() {
 }
 
 resolv_target() {
-	[[ ${#@} -ge 2 ]] || die "Bad call to resolv_target"
+	[[ ${#} -ge 2 ]] || die "Bad call to resolv_target"
 	if is_number $2; then
 		local targets=( `find_targets_$1` )
 		echo ${targets[$(( $2 - 1 ))]}
@@ -64,10 +87,38 @@ list_apache2() {
 	write_numbered_list -m "(none found)" "${targets[@]}"
 }
 
+list_apache2() {
+	a=get_active_apache2
+	targets=( $(find_targets_apache2) )
+	for (( i = 0; i < ${#targets[@]}; i++ )) ; do
+		is_enabled ${opts:-} ${targets[i]} \
+			&& targets[i]=$(highlight_marker "${targets[i]}")
+	done
+	write_numbered_list -m "(none found)" "${targets[@]}"
+}
+
+list_cli() {
+	local targets
+	local a
+	targets=( $(find_targets_cli) )
+	a=`get_active_cli`
+	for (( i = 0; i < ${#targets[@]}; i++ )) ; do
+		[[ $a == ${targets[i]} ]] && targets[i]=$(highlight_marker "${targets[i]}")
+	done
+	write_numbered_list -m "(none found)" "${targets[@]}"
+}
+
 set_apache2() {
 	ln -sf $1/modules/libphp5.so /usr/lib64/apache2/modules/
 }
 
+set_cli() {
+	t=`resolv_target cli $1`
+	local file
+	for file in `get_libdir`/$t/bin/*; do
+		ln -sf $file /usr/bin/$(basename $file)
+	done
+}
 
 ## set action
 
