@@ -41,6 +41,7 @@ find_targets_cli() {
 		[[ -f `get_libdir`/$target/bin/php ]] && echo $target
 	done
 }
+
 get_active_cli() {
 	echo `readlink /usr/bin/php | sed -e "s|/bin/php\$||g" | sed -e "s|^$(get_libdir)/||g"`
 }
@@ -57,14 +58,14 @@ is_enabled() {
 	return 1
 }
 
+
 resolv_target() {
-	[[ ${#} -ge 2 ]] || die "Bad call to resolv_target"
+	local targets=( `find_targets_$1` )
 	if is_number $2; then
-		local targets=( `find_targets_$1` )
-		echo ${targets[$(( $2 - 1 ))]}
-		return
+		[[ $2 -le ${#targets[@]} && $2 -gt 0 ]] && echo ${targets[ $(( $2 - 1 )) ]}
+	elif has $2 $targets; then
+		echo $2
 	fi
-	echo $2
 }
 
 ## Actual actions
@@ -109,11 +110,14 @@ list_cli() {
 }
 
 set_apache2() {
+	local t=`resolv_target apache2 $1`
+	[[ -z $t ]] && die -q "Bad target"
 	ln -sf $1/modules/libphp5.so /usr/lib64/apache2/modules/
 }
 
 set_cli() {
 	t=`resolv_target cli $1`
+	[[ -z $t ]] && die -q "Bad target"
 	local file
 	for file in `get_libdir`/$t/bin/*; do
 		ln -sf $file /usr/bin/$(basename $file)
