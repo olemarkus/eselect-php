@@ -27,7 +27,7 @@ find_targets() {
 
 find_targets_pecl() {
 	for target in `find_targets`; do
-		[[ -f `get_libdir`/$target/bin/phpize ]] && echo $(basename $target)
+		[[ -f `get_libdir`/$target/bin/phpize ]] && basename $target
 	done
 }
 
@@ -43,11 +43,11 @@ find_targets_cli() {
 }
 
 get_active_cli() {
-	echo `readlink /usr/bin/php | sed -e "s|/bin/php\$||g" | sed -e "s|^$(get_libdir)/||g"`
+	readlink /usr/bin/php | sed -e "s|/bin/php\$||g" | sed -e "s|^$(get_libdir)/||g"
 }
 
 get_enabled_targets() {
-	 echo $(load_config "${ENV_FILE}" PHP_ENABLED_VERSIONS)
+	 load_config "${ENV_FILE}" PHP_ENABLED_VERSIONS
 }
 
 is_enabled() {
@@ -62,7 +62,7 @@ is_enabled() {
 resolv_target() {
 	local targets=( `find_targets_$1` )
 	if is_number $2; then
-		[[ $2 -le ${#targets[@]} && $2 -gt 0 ]] && echo ${targets[ $(( $2 - 1 )) ]}
+		[[ $2 -le ${#targets[@]} && $2 -gt 0 ]] && echo "${targets[ $(( $2 - 1 )) ]}"
 	elif has $2 $targets; then
 		echo $2
 	fi
