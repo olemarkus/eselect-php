@@ -33,7 +33,7 @@ find_targets_pecl() {
 
 find_targets_apache2() {
 	for target in `find_targets`; do
-		[[ -f `get_libdir`/$target/apache/libphp5.so ]] && echo $target
+		[[ -f `get_libdir`/$target/apache2/libphp5.so ]] && echo $target
 	done
 }
 find_targets_cli() {
@@ -44,6 +44,10 @@ find_targets_cli() {
 
 get_active_cli() {
 	readlink /usr/bin/php | sed -e "s|/bin/php\$||g" | sed -e "s|^$(get_libdir)/||g"
+}
+
+get_active_apache2() {
+	readlink $(get_libdir)/apache2/modules/libphp5.so | sed -e "s|/apache2/libphp5.so\$||g" | sed -e "s|^$(get_libdir)/||g"
 }
 
 get_enabled_targets() {
@@ -80,20 +84,12 @@ list_pecl() {
 }
 
 list_apache2() {
+  local targets
+	local a
 	targets=( $(find_targets_apache2) )
+	a=`get_active_apache2`
 	for (( i = 0; i < ${#targets[@]}; i++ )) ; do
-		is_enabled ${opts:-} ${targets[i]} \
-			&& targets[i]=$(highlight_marker "${targets[i]}")
-	done
-	write_numbered_list -m "(none found)" "${targets[@]}"
-}
-
-list_apache2() {
-	a=get_active_apache2
-	targets=( $(find_targets_apache2) )
-	for (( i = 0; i < ${#targets[@]}; i++ )) ; do
-		is_enabled ${opts:-} ${targets[i]} \
-			&& targets[i]=$(highlight_marker "${targets[i]}")
+		[[ $a == ${targets[i]} ]] && targets[i]=$(highlight_marker "${targets[i]}")
 	done
 	write_numbered_list -m "(none found)" "${targets[@]}"
 }
@@ -112,7 +108,8 @@ list_cli() {
 set_apache2() {
 	local t=`resolv_target apache2 $1`
 	[[ -z $t ]] && die -q "Bad target"
-	ln -sf $1/modules/libphp5.so /usr/lib64/apache2/modules/
+	ln -sf `get_libdir`/$t/apache2/libphp5.so /usr/lib64/apache2/modules/
+	echo "You have to run \`/etc/init.d/apache2 restart\` for the changes to take effect"
 }
 
 set_cli() {
