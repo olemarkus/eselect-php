@@ -34,6 +34,18 @@ is_enabled() {
 	return 1
 }
 
+resolv_target() {
+	[[ ${#@} -ge 2 ]] || die "Bad call to resolv_target"
+	if is_number $2; then
+		local targets=( `find_targets_$1` )
+		echo ${targets[$(( $2 - 1 ))]}
+		return
+	fi
+	echo $2
+}
+
+## Actual actions
+
 list_pecl() {
 	targets=( $(find_targets_pecl) )
 	for (( i = 0; i < ${#targets[@]}; i++ )) ; do
@@ -63,9 +75,6 @@ do_set() {
 	set_$1 $2
 }
 
-
-
-
 ## enable action
 
 describe_enable() {
@@ -77,9 +86,32 @@ describe_enable_parameters() {
 }
 
 do_enable() {
- 	append_config "${ENV_FILE}" PHP_ENABLED_VERSIONS $1
+	local target=`resolv_target pecl $1`
+ 	append_config "${ENV_FILE}" PHP_ENABLED_VERSIONS "${target}"
 }
 
+## disable action
+
+describe_disable() {
+	echo "Makes PECL ebuilds build extension for this slot"
+}
+
+describe_disable_parameters() {
+	echo "<php slot>"
+}
+
+do_disable() {
+	[[ -z $1 ]] && die -q "You must specify a PHP slot"
+	local new_ever
+	local t=`resolv_target pecl $1`
+  is_enabled $t || die -q "$t not enabled"
+
+	new_ever=`get_enabled_targets | sed -e "s/$t \?//g" | sed -e "s/^ ?//g"`
+
+	[[ -z $new_ever ]] && die -q "You cannot have all PHP versions disabled"
+
+	store_config ${ENV_FILE}  PHP_ENABLED_VERSIONS "${new_ever}"
+}
 
 ## List action
 
@@ -92,5 +124,6 @@ describe_enable_parameters() {
 }
 
 do_list() {
+	[[ -z $1 ]] && die -q "Please chose one of the following modules: ${MODULES}"
 	list_$1
 }
