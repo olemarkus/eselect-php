@@ -179,3 +179,14 @@ do_list() {
 	[[ -z $1 ]] && die -q "Please chose one of the following modules: ${MODULES}"
 	list_$1
 }
+
+do_show() {
+	if [[ $1 == "pecl" ]]; then
+		get_enabled_targets
+	else
+		get_active_$1
+	fi
+}
+
+
+
