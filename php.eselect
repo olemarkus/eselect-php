@@ -7,65 +7,87 @@ MAINTAINER="php-bugs@gentoo.org"
 
 MODULES="cli apache2 fpm cgi"
 
-get_libdir() {
-	local dir
+get_libdirs() {
+	local dir libdirs
 	for dir in $(list_libdirs); do
 		[[ -L /usr/${dir} ]] && continue
-		ls /usr/${dir}/php*.* > /dev/null 2>&1
-		if [[ $? -eq 0 ]] ; then
-			echo /usr/$dir
-			return
-		fi
+		ls /usr/${dir}/php*.* > /dev/null 2>&1 || continue
+
+		libdirs+=' '/usr/${dir}
+	done
+	echo ${libdirs:-/usr/lib}
+}
+
+get_active_libdir() {
+	local dir
+	for dir in $(get_libdirs); do
+		echo ${dir}
+		return
 	done
 	echo /usr/lib
 }
 
 find_targets() {
-	for dir in "${EPREFIX}"$(get_libdir)/php*.*; do
-		t=$(basename $dir)
-		has $t $dirs || dirs="${dirs} $t"
+	local dir dirs libdir
+	for libdir in $(get_libdirs); do
+		for dir in "${EPREFIX}"${libdir}/php*.*; do
+			t=$(basename $dir)
+			has $t $dirs || dirs="${dirs} $t"
+		done
 	done
   echo $dirs
 }
 
 find_targets_apache2() {
+	local target libdir
 	for target in $(find_targets); do
-		[[ -f ${EPREFIX}$(get_libdir)/$target/apache2/libphp5.so ]] && echo $target
-	done
+		for libdir in $(get_libdirs); do
+			[[ -f ${EPREFIX}${libdir}/$target/apache2/libphp5.so ]] && echo $target
+		done
+	done | sort -u
 }
 
 find_targets_cli() {
+	local target libdir
 	for target in $(find_targets); do
-		[[ -f ${EPREFIX}$(get_libdir)/$target/bin/php ]] && echo $target
-	done
+		for libdir in $(get_libdirs); do
+			[[ -f ${EPREFIX}${libdir}/$target/bin/php ]] && echo $target
+		done
+	done | sort -u
 }
 
 find_targets_fpm() {
+	local target libdir
 	for target in $(find_targets); do
-		[[ -f ${EPREFIX}$(get_libdir)/$target/bin/php-fpm ]] && echo $target
-	done
+		for libdir in $(get_libdirs); do
+			[[ -f ${EPREFIX}${libdir}/$target/bin/php-fpm ]] && echo $target
+		done
+	done | sort -u
 }
 
 find_targets_cgi() {
+	local target libdir
 	for target in $(find_targets); do
-		[[ -f ${EPREFIX}$(get_libdir)/$target/bin/php-cgi ]] && echo $target
-	done
+		for libdir in $(get_libdirs); do
+			[[ -f ${EPREFIX}${libdir}/$target/bin/php-cgi ]] && echo $target
+		done
+	done | sort -u
 }
 
 get_active_cli() {
-	readlink -e "${EPREFIX}"/usr/bin/php | sed -ne "s:$(get_libdir)/\(php[0-9]\.[0-9][0-9]*\)/bin/php:\1:p"
+	readlink -e "${EPREFIX}"/usr/bin/php | sed -ne "s:.*/usr/.*/\(php[0-9]\.[0-9][0-9]*\)/bin/php:\1:p"
 }
 
 get_active_cgi() {
-	readlink -e "${EPREFIX}"/usr/bin/php-cgi | sed -ne "s:$(get_libdir)/\(php[0-9]\.[0-9]\)/bin/php-cgi:\1:p"
+	readlink -e "${EPREFIX}"/usr/bin/php-cgi | sed -ne "s:.*/usr/.*/\(php[0-9]\.[0-9]\)/bin/php-cgi:\1:p"
 }
 
 get_active_fpm() {
-	readlink -e "${EPREFIX}"/usr/bin/php-fpm | sed -ne "s:$(get_libdir)/\(php[0-9]\.[0-9]\)/bin/php-fpm:\1:p"
+	readlink -e "${EPREFIX}"/usr/bin/php-fpm | sed -ne "s:.*/usr/.*/\(php[0-9]\.[0-9]\)/bin/php-fpm:\1:p"
 }
 
 get_active_apache2() {
-	readlink -e "${EPREFIX}"$(get_libdir)/apache2/modules/libphp5.so | sed -ne "s:$(get_libdir)/\(php[0-9]\.[0-9]\)/apache2/libphp5.so:\1:p"
+	readlink -e "${EPREFIX}"$(get_active_libdir)/apache2/modules/libphp5.so | sed -ne "s:.*/usr/.*/\(php[0-9]\.[0-9]\)/apache2/libphp5.so:\1:p"
 }
 
 resolv_target() {
@@ -128,19 +150,20 @@ list_fpm() {
 }
 
 set_apache2() {
-	local t=$(resolv_target apache2 $1)
+	local libdir t=$(resolv_target apache2 $1)
 	[[ -z $t ]] && die -q "Bad target"
-	ln -sf "${EPREFIX}"$(get_libdir)/$t/apache2/libphp5.so $(get_libdir)/apache2/modules/ || \
-		die -q "Failed to set symlink for libphp5.so"
+	for libdir in $(get_libdirs); do
+		ln -sf ../../$t/apache2/libphp5.so ${libdir}/apache2/modules/ || \
+			die -q "Failed to set symlink for ${libdir}/apache2/modules/libphp5.so"
+	done
 	echo "You have to run \`${EPREFIX}/etc/init.d/apache2 restart' for the changes to take effect"
 }
 
 set_cli() {
-	t=$(resolv_target cli $1)
+	local file libdir t=$(resolv_target cli $1)
 	[[ -z $t ]] && die -q "Bad target"
-	local file
 	for file in php phpize php-config; do
-		ln -sf "${EPREFIX}"$(get_libdir)/$t/bin/$file /usr/bin/$file || \
+		ln -sf ../..$(get_active_libdir)/$t/bin/$file /usr/bin/$file || \
 			die -q "Failed to create symlink for ${file}"
 	done
 }
@@ -148,15 +171,14 @@ set_cli() {
 set_cgi() {
 	t=$(resolv_target cgi $1)
 	[[ -z $t ]] && die -q "Bad target"
-	local file
-	ln -sf "${EPREFIX}"$(get_libdir)/$t/bin/php-cgi /usr/bin/php-cgi || \
+	ln -sf ../..$(get_active_libdir)/$t/bin/php-cgi /usr/bin/php-cgi || \
 	  die -q "Failed to create symlink for php-cgi"
 }
 
 set_fpm() {
 	local t=$(resolv_target fpm $1)
 	[[ -z $t ]] && die -q "Bad target"
-	ln -sf "${EPREFIX}"$(get_libdir)/$t/bin/php-fpm /usr/bin/php-fpm || \
+	ln -sf ../..$(get_active_libdir)/$t/bin/php-fpm /usr/bin/php-fpm || \
 		die -q "Failed to create symlink for the php-fpm binary"
 	echo "You have to run \`${EPREFIX}/etc/init.d/php-fpm restart' for the changes to take effect"
 }
