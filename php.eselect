@@ -5,89 +5,89 @@ inherit config multilib
 DESCRIPTION="Manage php installations"
 MAINTAINER="php-bugs@gentoo.org"
 
-ENV_FILE=${ROOT}/etc/env.d/19php
-MODULES="pecl cli apache2"
+MODULES="cli apache2 fpm cgi"
 
 get_libdir() {
 	local dir
-	if has lib64 `list_libdirs`; then
-		echo /usr/lib64
-		return
-	fi
+	for dir in $(list_libdirs); do
+		[[ -L /usr/${dir} ]] && continue
+		ls /usr/${dir}/php*.* > /dev/null 2>&1
+		if [[ $? -eq 0 ]] ; then
+			echo /usr/$dir
+			return
+		fi
+	done
 	echo /usr/lib
 }
 
 find_targets() {
-	for dir in $(get_libdir)/php*; do
-		t=`basename $dir`
+	for dir in "${EPREFIX}"$(get_libdir)/php*.*; do
+		t=$(basename $dir)
 		has $t $dirs || dirs="${dirs} $t"
 	done
   echo $dirs
 }
 
-find_targets_pecl() {
-	for target in `find_targets`; do
-		[[ -f `get_libdir`/$target/bin/phpize ]] && basename $target
+find_targets_apache2() {
+	for target in $(find_targets); do
+		[[ -f ${EPREFIX}$(get_libdir)/$target/apache2/libphp5.so ]] && echo $target
 	done
 }
 
-find_targets_apache2() {
-	for target in `find_targets`; do
-		[[ -f `get_libdir`/$target/apache2/libphp5.so ]] && echo $target
+find_targets_cli() {
+	for target in $(find_targets); do
+		[[ -f ${EPREFIX}$(get_libdir)/$target/bin/php ]] && echo $target
 	done
 }
-find_targets_cli() {
-	for target in `find_targets`; do
-		[[ -f `get_libdir`/$target/bin/php ]] && echo $target
+
+find_targets_fpm() {
+	for target in $(find_targets); do
+		[[ -f ${EPREFIX}$(get_libdir)/$target/bin/php-fpm ]] && echo $target
+	done
+}
+
+find_targets_cgi() {
+	for target in $(find_targets); do
+		[[ -f ${EPREFIX}$(get_libdir)/$target/bin/php-cgi ]] && echo $target
 	done
 }
 
 get_active_cli() {
-	readlink /usr/bin/php | sed -e "s|/bin/php\$||g" | sed -e "s|^$(get_libdir)/||g"
+	readlink -e "${EPREFIX}"/usr/bin/php | sed -ne "s:$(get_libdir)/\(php[0-9]\.[0-9][0-9]*\)/bin/php:\1:p"
+}
+
+get_active_cgi() {
+	readlink -e "${EPREFIX}"/usr/bin/php-cgi | sed -ne "s:$(get_libdir)/\(php[0-9]\.[0-9]\)/bin/php-cgi:\1:p"
+}
+
+get_active_fpm() {
+	readlink -e "${EPREFIX}"/usr/bin/php-fpm | sed -ne "s:$(get_libdir)/\(php[0-9]\.[0-9]\)/bin/php-fpm:\1:p"
 }
 
 get_active_apache2() {
-	readlink $(get_libdir)/apache2/modules/libphp5.so | sed -e "s|/apache2/libphp5.so\$||g" | sed -e "s|^$(get_libdir)/||g"
+	readlink -e "${EPREFIX}"$(get_libdir)/apache2/modules/libphp5.so | sed -ne "s:$(get_libdir)/\(php[0-9]\.[0-9]\)/apache2/libphp5.so:\1:p"
 }
-
-get_enabled_targets() {
-	 load_config "${ENV_FILE}" PHP_ENABLED_VERSIONS
-}
-
-is_enabled() {
-	local target
-	for target in $(get_enabled_targets); do
-		[[ $target == $1 ]] && return 0
-	done
-	return 1
-}
-
 
 resolv_target() {
-	local targets=( `find_targets_$1` )
+	local targets=( $(find_targets_$1) )
 	if is_number $2; then
 		[[ $2 -le ${#targets[@]} && $2 -gt 0 ]] && echo "${targets[ $(( $2 - 1 )) ]}"
-	elif has $2 $targets; then
-		echo $2
+	elif has $2 ${targets[@]}; then
+	  echo $2
 	fi
+}
+
+check_module() {
+	has $1 $(echo $MODULES) || die -q "Please chose one of the following modules: ${MODULES}"
 }
 
 ## Actual actions
 
-list_pecl() {
-	targets=( $(find_targets_pecl) )
-	for (( i = 0; i < ${#targets[@]}; i++ )) ; do
-		is_enabled ${opts:-} ${targets[i]} \
-			&& targets[i]=$(highlight_marker "${targets[i]}")
-	done
-	write_numbered_list -m "(none found)" "${targets[@]}"
-}
-
 list_apache2() {
-  local targets
+	local targets
 	local a
 	targets=( $(find_targets_apache2) )
-	a=`get_active_apache2`
+	a=$(get_active_apache2)
 	for (( i = 0; i < ${#targets[@]}; i++ )) ; do
 		[[ $a == ${targets[i]} ]] && targets[i]=$(highlight_marker "${targets[i]}")
 	done
@@ -98,7 +98,29 @@ list_cli() {
 	local targets
 	local a
 	targets=( $(find_targets_cli) )
-	a=`get_active_cli`
+	a=$(get_active_cli)
+	for (( i = 0; i < ${#targets[@]}; i++ )) ; do
+		[[ $a == ${targets[i]} ]] && targets[i]=$(highlight_marker "${targets[i]}")
+	done
+	write_numbered_list -m "(none found)" "${targets[@]}"
+}
+
+list_cgi() {
+	local targets
+	local a
+	targets=( $(find_targets_cgi) )
+	a=$(get_active_cgi)
+	for (( i = 0; i < ${#targets[@]}; i++ )) ; do
+		[[ $a == ${targets[i]} ]] && targets[i]=$(highlight_marker "${targets[i]}")
+	done
+	write_numbered_list -m "(none found)" "${targets[@]}"
+}
+
+list_fpm() {
+	local targets
+	local a
+	targets=( $(find_targets_fpm) )
+	a=$(get_active_fpm)
 	for (( i = 0; i < ${#targets[@]}; i++ )) ; do
 		[[ $a == ${targets[i]} ]] && targets[i]=$(highlight_marker "${targets[i]}")
 	done
@@ -106,87 +128,95 @@ list_cli() {
 }
 
 set_apache2() {
-	local t=`resolv_target apache2 $1`
+	local t=$(resolv_target apache2 $1)
 	[[ -z $t ]] && die -q "Bad target"
-	ln -sf `get_libdir`/$t/apache2/libphp5.so /usr/lib64/apache2/modules/
-	echo "You have to run \`/etc/init.d/apache2 restart\` for the changes to take effect"
+	ln -sf "${EPREFIX}"$(get_libdir)/$t/apache2/libphp5.so $(get_libdir)/apache2/modules/ || \
+		die -q "Failed to set symlink for libphp5.so"
+	echo "You have to run \`${EPREFIX}/etc/init.d/apache2 restart' for the changes to take effect"
 }
 
 set_cli() {
-	t=`resolv_target cli $1`
+	t=$(resolv_target cli $1)
 	[[ -z $t ]] && die -q "Bad target"
 	local file
-	for file in "php phpize php-config"; do
-		ln -sf `get_libdir`/$t/bin/$file /usr/bin/$(basename $file)
+	for file in php phpize php-config; do
+		ln -sf "${EPREFIX}"$(get_libdir)/$t/bin/$file /usr/bin/$file || \
+			die -q "Failed to create symlink for ${file}"
 	done
 }
 
+set_cgi() {
+	t=$(resolv_target cgi $1)
+	[[ -z $t ]] && die -q "Bad target"
+	local file
+	ln -sf "${EPREFIX}"$(get_libdir)/$t/bin/php-cgi /usr/bin/php-cgi || \
+	  die -q "Failed to create symlink for php-cgi"
+}
+
+set_fpm() {
+	local t=$(resolv_target fpm $1)
+	[[ -z $t ]] && die -q "Bad target"
+	ln -sf "${EPREFIX}"$(get_libdir)/$t/bin/php-fpm /usr/bin/php-fpm || \
+		die -q "Failed to create symlink for the php-fpm binary"
+	echo "You have to run \`${EPREFIX}/etc/init.d/php-fpm restart' for the changes to take effect"
+}
 ## set action
 
+describe_set() {
+	echo "Sets the current configuration for a module"
+}
+
+describe_set_parameters() {
+	echo "<module> <target>"
+}
+
+describe_set_options() {
+	echo "module:	one of ${MODULES}"
+	echo "target:	Target name or number (from the 'list' action)"
+}
+
+
 do_set() {
+	check_module $1
 	set_$1 $2
 }
 
-## enable action
 
-describe_enable() {
-	echo "Makes PECL ebuilds build extension for this slot"
-}
-
-describe_enable_parameters() {
-	echo "<php slot>"
-}
-
-do_enable() {
-	local target=`resolv_target pecl $1`
- 	append_config "${ENV_FILE}" PHP_ENABLED_VERSIONS "${target}"
-}
-
-## disable action
-
-describe_disable() {
-	echo "Makes PECL ebuilds build extension for this slot"
-}
-
-describe_disable_parameters() {
-	echo "<php slot>"
-}
-
-do_disable() {
-	[[ -z $1 ]] && die -q "You must specify a PHP slot"
-	local new_ever
-	local t=`resolv_target pecl $1`
-  is_enabled $t || die -q "$t not enabled"
-
-	new_ever=`get_enabled_targets | sed -e "s/$t \?//g" | sed -e "s/^ ?//g"`
-
-	[[ -z $new_ever ]] && die -q "You cannot have all PHP versions disabled"
-
-	store_config ${ENV_FILE}  PHP_ENABLED_VERSIONS "${new_ever}"
-}
 
 ## List action
 
 describe_list() {
-	echo "Lists available php installs for a sapi"
+	echo "Lists available php installs for a module"
 }
 
-describe_enable_parameters() {
+describe_list_parameters() {
 	echo "<module>"
 }
 
+describe_list_options() {
+	echo "module: one of ${MODULES}"
+}
+
 do_list() {
-	[[ -z $1 ]] && die -q "Please chose one of the following modules: ${MODULES}"
+	check_module $1
 	list_$1
 }
 
-do_show() {
-	if [[ $1 == "pecl" ]]; then
-		get_enabled_targets
-	else
-		get_active_$1
-	fi
+## Show action
+
+describe_show() {
+	echo "Lists available php installs for a module"
 }
 
+describe_show_parameters() {
+	echo "<module>"
+}
 
+describe_show_options() {
+	echo "module: one of ${MODULES}"
+}
 
+do_show() {
+		check_module $1
+		get_active_$1
+}
