@@ -33,7 +33,7 @@ get_active_libdir() {
 get_libname() {
 	# probe on a well-known library
 	local lib ret=.so
-	for lib in "${EROOT}"/lib/libz.* ; do
+	for lib in "${EROOT}"$(get_active_libdir)/libz.* ; do
 		case "${lib##*/}" in
 			libz.a)    ret=.a   ;; # some platforms use .a as ext
 			libz.*.*)  continue ;;
