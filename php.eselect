@@ -10,6 +10,44 @@ MAINTAINER="php-bugs@gentoo.org"
 
 MODULES="cli apache2 fpm cgi"
 
+cli_link="${EROOT}"/usr/bin/php
+fpm_link="${EROOT}"/usr/bin/php-fpm
+cgi_link="${EROOT}"/usr/bin/php-cgi
+apache2_link="${EROOT}"$(get_active_libdir)/apache2/modules/libphp5$(get_libname)
+
+cleanup_sapis() {
+	local m
+	local link
+	for m in $MODULES ; do
+		cleanup_sapi $m
+	done
+}
+
+cleanup_sapi() {
+	local l=${1}_link
+	local link=${!l}
+	if [[ -L $link && ! -e $link ]] ; then
+		echo -n "Broken link for $1"
+		if update_sapi $1 ; then
+			echo ", updated version to $(get_active_$1)"
+			return
+		else 
+			rm $link
+
+			return
+		fi
+	fi
+	return 1
+}
+
+update_sapi() {
+	local target=$(find_targets_$1 | tail -n 1)
+	local current=$(get_active_$1)
+	[[ -z $target ]] && return 1
+	[[ $current = $target ]] && return 1
+	set_$1 $target
+}
+
 get_libdirs() {
 	local dir libdirs
 	for dir in $(list_libdirs); do
@@ -44,6 +82,12 @@ get_libname() {
 		esac
 	done
 	echo ${ret}
+}
+
+cleanup() {
+	local target=$(find_targets_$1 | tail -n 1)
+	[[ -z $target ]] && 
+	set_$1 $target
 }
 
 find_targets() {
@@ -258,8 +302,8 @@ describe_show_options() {
 }
 
 do_show() {
-		check_module $1
-		get_active_$1
+	check_module $1
+	get_active_$1
 }
 
 ## update action
@@ -285,7 +329,23 @@ do_update() {
 	[[ ( ${2} == ifunset || ${2} == '--if-unset' ) && -n $(get_active_$1) ]] && \
 		return
 
-    local target=$(find_targets_$1 | tail -n 1)
-    [[ -z $target ]] && die -q "No available targets for $1"
-	set_$1 $target
+    update_sapi $1 || echo "Nothing to update"
+}
+
+## cleanup action
+
+describe_cleanup() {
+	echo "Automatically clean up stale links"
+}
+
+describe_cleanup_parameters() {
+	echo
+}
+
+describe_cleanup_options() {
+	echo
+}
+
+do_cleanup() {
+    cleanup_sapis
 }
