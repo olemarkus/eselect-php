@@ -261,3 +261,31 @@ do_show() {
 		check_module $1
 		get_active_$1
 }
+
+## update action
+
+describe_update() {
+	echo "Automatically update the php versions"
+}
+
+describe_update_parameters() {
+	echo "<module> [ifunset]"
+}
+
+describe_update_options() {
+	echo "module: one of ${MODULES}"
+	echo "ifunset : Do not override existing implementation"
+}
+
+do_update() {
+    check_module $1
+	[[ -z ${2} || ( -z ${3} && ( ${2} == ifunset || ${2} == '--if-unset' ) ) ]] || \
+		die -q "Usage error"
+
+	[[ ( ${2} == ifunset || ${2} == '--if-unset' ) && -n $(get_active_$1) ]] && \
+		return
+
+    local target=$(find_targets_$1 | tail -n 1)
+    [[ -z $target ]] && die -q "No available targets for $1"
+	set_$1 $target
+}
