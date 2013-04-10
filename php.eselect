@@ -13,7 +13,6 @@ MODULES="cli apache2 fpm cgi"
 cli_link="${EROOT}"/usr/bin/php
 fpm_link="${EROOT}"/usr/bin/php-fpm
 cgi_link="${EROOT}"/usr/bin/php-cgi
-apache2_link="${EROOT}"$(get_active_libdir)/apache2/modules/libphp5$(get_libname)
 
 cleanup_sapis() {
 	local m
@@ -83,6 +82,8 @@ get_libname() {
 	done
 	echo ${ret}
 }
+
+apache2_link="${EROOT}"$(get_active_libdir)/apache2/modules/libphp5$(get_libname)
 
 cleanup() {
 	local target=$(find_targets_$1 | tail -n 1)
