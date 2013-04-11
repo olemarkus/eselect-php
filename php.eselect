@@ -28,11 +28,11 @@ cleanup_sapi() {
 	if [[ -L $link && ! -e $link ]] ; then
 		echo -n "Broken link for $1"
 		if update_sapi $1 ; then
-			echo ", updated version to $(get_active_$1)"
+			echo ". Updated version to $(get_active_$1)"
 			return
 		else 
 			rm $link
-
+			echo ". No suitable targets left. Removing"
 			return
 		fi
 	fi
